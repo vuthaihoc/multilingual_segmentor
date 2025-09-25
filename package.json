@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/vuthaihoc/multilingual_segmentor#readme",
   "dependencies": {
+    "cld3-asm": "^4.0.0",
     "express": "^5.1.0",
     "franc": "^6.2.0",
     "iso-639-3-to-1": "^1.0.0",
