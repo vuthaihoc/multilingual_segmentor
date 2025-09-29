@@ -16,8 +16,6 @@ app = FastAPI()
 ja_tagger = GenericTagger()
 ko_tagger = Okt()
 
-langid.set_languages(['en', 'vi', 'zh', 'ja', 'ko'])
-
 class TextInput(BaseModel):
     text: str
     language_code: str | None = None
