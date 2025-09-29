@@ -1,0 +1,8 @@
+services:
+  segment-server:
+    build: .
+    container_name: py-segment-server
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
