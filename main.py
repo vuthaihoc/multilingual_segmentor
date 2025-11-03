@@ -101,3 +101,34 @@ async def paragraph_segment(input: TextInput):
         "force_nltk": force_nltk,
         "sentences": segmented_sentences
     }
+
+# ------------------------
+# 3️⃣ /bulk/segment (NEW)
+# ------------------------
+class BulkTextInput(BaseModel):
+    items: list[TextInput]
+
+@app.post("/bulk/segment")
+async def bulk_segment(input: BulkTextInput):
+    results = []
+    for item in input.items:
+        text = item.text
+        force_nltk = item.force_nltk
+        lang_code = item.language_code
+
+        if not lang_code:
+            try:
+                detected_code, confidence = langid.classify(text)
+                lang_code = to_iso639_1(detected_code)
+            except:
+                lang_code = "und"
+
+        tokens = segment_text_by_lang(text, lang_code, force_nltk)
+        results.append({
+            "language_code": lang_code,
+            "force_nltk": force_nltk,
+            "tokens": tokens,
+            "text": text
+        })
+
+    return {"results": results}
