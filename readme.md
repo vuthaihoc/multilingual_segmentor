@@ -1,110 +1,86 @@
 # Text Segmentation API
 
-API này cung cấp các endpoint để tách câu và từ (tokenization) cho nhiều ngôn ngữ: tiếng Việt, tiếng Trung, tiếng Nhật, tiếng Hàn và tiếng Anh.  
+API phân đoạn (tokenize) văn bản theo ngôn ngữ, hỗ trợ tiếng:
+
+- Tiếng Việt (via `underthesea`)
+- Tiếng Trung (via `jieba`)
+- Tiếng Nhật (via `fugashi`)
+- Tiếng Hàn (via `KoNLPy`)
+- Các ngôn ngữ khác (via `nltk`)
+
+API hỗ trợ:
+
+- Phân đoạn 1 đoạn text (`/segment`)
+- Phân đoạn theo câu (`/paragraph/segment`)
+- Phân đoạn bulk nhiều đoạn text cùng lúc (`/bulk/segment`)
 
 ---
 
-## 📦 Yêu cầu
-
-- Python 3.9+
-- Thư viện:
-
-```text
-fastapi>=0.95.0
-uvicorn>=0.22.0
-langid>=1.1.6
-jieba>=0.42.1
-fugashi>=1.2.1
-unidic-lite>=1.0.8
-konlpy>=0.6.0
-nltk>=3.8.1
-pycountry>=22.3.5
-underthesea>=1.3.4
-````
-
-Cài đặt tất cả thư viện:
+## 1️⃣ Cài đặt
 
 ```bash
-pip install -r requirements.txt
+# Clone repo
+git clone <repo-url>
+cd <repo-folder>
+
+# Tạo virtualenv
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+venv\Scripts\activate     # Windows
+
+# Cài dependencies
+pip install fastapi uvicorn langid pycountry jieba fugashi konlpy nltk underthesea
 ```
+
+> Lưu ý: `konlpy` yêu cầu Java JDK.
+> `fugashi` yêu cầu `mecab` cài sẵn trên hệ thống.
 
 ---
 
-## 🚀 Khởi chạy server
+## 2️⃣ Chạy server
 
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --reload
 ```
 
-Server sẽ chạy trên: `http://localhost:8000`
+Server sẽ chạy ở `http://127.0.0.1:8000`
 
 ---
 
-## 📝 Input Model
+## 3️⃣ Endpoints
 
-Cả 2 API đều sử dụng cùng định dạng input JSON:
+### `/segment`
+
+- Phân đoạn 1 đoạn text
+- **Method:** POST
+- **Body:**
 
 ```json
 {
-  "text": "Đoạn văn hoặc câu cần tách từ.",
-  "language_code": "vi",    // tùy chọn, override detect
-  "force_nltk": false        // tùy chọn, nếu true luôn dùng NLTK tokenizer
+  "text": "văn bản cần phân đoạn",
+  "language_code": "zh",    # tuỳ chọn, nếu bỏ trống sẽ tự detect
+  "force_nltk": false       # tuỳ chọn, ép dùng nltk
 }
 ```
 
-* `text`: đoạn văn hoặc câu muốn segment.
-* `language_code`: mã ngôn ngữ 2 ký tự ISO-639-1 (nếu không truyền, hệ thống sẽ detect tự động).
-* `force_nltk`: nếu `true`, sẽ dùng NLTK tokenizer cho tất cả ngôn ngữ.
-
----
-
-## 📌 API Endpoints
-
-### 1. `/segment`
-
-Tách **một câu hoặc một đoạn ngắn** thành tokens (từ).
-
-* **Method:** POST
-* **URL:** `/segment`
-* **Request Example:**
+- **Response:**
 
 ```json
 {
-  "text": "Xin chào thế giới!",
-  "language_code": "vi",
-  "force_nltk": false
-}
-```
-
-* **Response Example:**
-
-```json
-{
-  "language_code": "vi",
+  "language_code": "zh",
   "force_nltk": false,
-  "tokens": ["Xin", "chào", "thế", "giới", "!"]
+  "tokens": ["突然间", "，", "一切", "都", "崩塌", "了"]
 }
 ```
 
 ---
 
-### 2. `/paragraph/segment`
+### `/paragraph/segment`
 
-Tách **một đoạn văn dài** thành câu, sau đó tách từ từng câu.
-
-* **Method:** POST
-* **URL:** `/paragraph/segment`
-* **Request Example:**
-
-```json
-{
-  "text": "Xin chào! Tôi tên là ChatGPT. Rất vui được gặp bạn.",
-  "language_code": "vi",
-  "force_nltk": false
-}
-```
-
-* **Response Example:**
+- Tách câu và phân đoạn theo câu
+- **Method:** POST
+- **Body:** giống `/segment`
+- **Response:**
 
 ```json
 {
@@ -112,16 +88,12 @@ Tách **một đoạn văn dài** thành câu, sau đó tách từ từng câu.
   "force_nltk": false,
   "sentences": [
     {
-      "sentence": "Xin chào!",
-      "tokens": ["Xin", "chào", "!"]
+      "sentence": "Hôm nay trời đẹp.",
+      "tokens": ["Hôm", "nay", "trời", "đẹp", "."]
     },
     {
-      "sentence": "Tôi tên là ChatGPT.",
-      "tokens": ["Tôi", "tên", "là", "ChatGPT", "."]
-    },
-    {
-      "sentence": "Rất vui được gặp bạn.",
-      "tokens": ["Rất", "vui", "được", "gặp", "bạn", "."]
+      "sentence": "Chúng ta đi công viên nhé?",
+      "tokens": ["Chúng", "ta", "đi", "công", "viên", "nhé", "?"]
     }
   ]
 }
@@ -129,46 +101,86 @@ Tách **một đoạn văn dài** thành câu, sau đó tách từ từng câu.
 
 ---
 
-## 🔧 Lưu ý
+### `/bulk/segment`
 
-* Hỗ trợ các ngôn ngữ:
+- Phân đoạn nhiều đoạn text cùng lúc
+- **Method:** POST
+- **Body:**
 
-  * Tiếng Việt (`vi`) → `underthesea`
-  * Tiếng Trung (`zh`) → `jieba`
-  * Tiếng Nhật (`ja`) → `fugashi`
-  * Tiếng Hàn (`ko`) → `konlpy.Okt`
-  * Tiếng Anh và các ngôn ngữ khác → `nltk`
+```json
+{
+  "items": [
+    { "text": "Xin chào, tôi là ChatGPT." },
+    { "text": "突然间，一切都崩塌了" },
+    { "text": "こんにちは、元気ですか？" },
+    { "text": "오늘 날씨가 좋네요" }
+  ]
+}
+```
 
-* `language_code` mặc định được detect bằng `langid.py`.
+- **Response:**
 
-* `force_nltk=True` sẽ bỏ qua detect và tokenizers riêng theo ngôn ngữ, luôn dùng NLTK.
+```json
+{
+  "results": [
+    {
+      "language_code": "vi",
+      "force_nltk": false,
+      "tokens": ["Xin", "chào", ",", "tôi", "là", "ChatGPT", "."],
+      "text": "Xin chào, tôi là ChatGPT."
+    },
+    {
+      "language_code": "zh",
+      "force_nltk": false,
+      "tokens": ["突然间", "，", "一切", "都", "崩塌", "了"],
+      "text": "突然间，一切都崩塌了"
+    },
+    {
+      "language_code": "ja",
+      "force_nltk": false,
+      "tokens": ["こんにちは", "元気", "です", "か", "？"],
+      "text": "こんにちは、元気ですか？"
+    },
+    {
+      "language_code": "ko",
+      "force_nltk": false,
+      "tokens": ["오늘", "날씨", "가", "좋네요"],
+      "text": "오늘 날씨가 좋네요"
+    }
+  ]
+}
+```
 
 ---
 
-## ⚡ Test nhanh với `curl`
+## 4️⃣ Ví dụ curl
+
+### 4.1 Tiếng Trung
 
 ```bash
-curl -X POST "http://localhost:8000/segment" \
+curl -X POST "http://127.0.0.1:8000/bulk/segment" \
 -H "Content-Type: application/json" \
--d '{"text":"Xin chào thế giới!","language_code":"vi"}'
-
-curl -X POST "http://localhost:8000/paragraph/segment" \
--H "Content-Type: application/json" \
--d '{"text":"Xin chào! Tôi tên là ChatGPT.","language_code":"vi"}'
+-d '{
+  "items": [{"text": "突然间，一切都崩塌了"}]
+}'
 ```
 
----
+### 4.2 Tiếng Nhật
 
-## 📚 Tài liệu
-
-* [FastAPI](https://fastapi.tiangolo.com/)
-* [NLTK](https://www.nltk.org/)
-* [Underthesea](https://github.com/underthesea/underthesea)
-* [jieba](https://github.com/fxsjy/jieba)
-* [Fugashi](https://pypi.org/project/fugashi/)
-* [Konlpy](https://konlpy.org/en/latest/)
-* [langid.py](https://github.com/saffsd/langid.py)
-
+```bash
+curl -X POST "http://127.0.0.1:8000/bulk/segment" \
+-H "Content-Type: application/json" \
+-d '{
+  "items": [{"text": "今日はとても良い天気です"}]
+}'
 ```
 
----
+### 4.3 Tiếng Hàn
+
+```bash
+curl -X POST "http://127.0.0.1:8000/bulk/segment" \
+-H "Content-Type: application/json" \
+-d '{
+  "items": [{"text": "오늘 날씨가 좋네요"}]
+}'
+```
