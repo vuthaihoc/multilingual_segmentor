@@ -8,6 +8,10 @@ from konlpy.tag import Okt
 import nltk
 from underthesea import sent_tokenize as vi_sent_tokenize, word_tokenize as vi_word_tokenize
 
+from pypinyin import lazy_pinyin
+import pykakasi
+import hgtk
+
 nltk.download("punkt", quiet=True)
 
 app = FastAPI()
@@ -15,6 +19,9 @@ app = FastAPI()
 # init tokenizer
 ja_tagger = GenericTagger()
 ko_tagger = Okt()
+
+# khởi tạo transliteration cho JA
+kks = pykakasi.kakasi()
 
 class TextInput(BaseModel):
     text: str
@@ -33,19 +40,45 @@ def to_iso639_1(lang_code: str) -> str:
         pass
     return lang_code[:2]
 
+def transliterate_token(token: str, lang_code: str) -> str:
+    if lang_code == "zh":
+        # pypinyin trả list, nối lại thành string cho token
+        return "".join(lazy_pinyin(token))
+    elif lang_code == "ja":
+        result = ja_kakasi.convert(token)
+        # lấy phần romaji của token
+        return "".join([r['hepburn'] for r in result])
+    elif lang_code == "ko":
+        try:
+            return hgtk.text.transliterate(token)
+        except hgtk.exception.NotHangulException:
+            return token
+    else:
+        return token  # các ngôn ngữ khác giữ nguyên
+
+
 def segment_text_by_lang(text: str, lang_code: str, force_nltk: bool):
     if force_nltk:
-        return nltk.word_tokenize(text)
-    if lang_code == "zh":
-        return list(jieba.cut(text))
+        tokens = nltk.word_tokenize(text)
+    elif lang_code == "zh":
+        tokens = list(jieba.cut(text))
     elif lang_code == "ja":
-        return [word.surface for word in ja_tagger(text)]
+        tokens = [word.surface for word in ja_tagger(text)]
     elif lang_code == "ko":
-        return ko_tagger.morphs(text)
+        tokens = ko_tagger.morphs(text)
     elif lang_code == "vi":
-        return vi_word_tokenize(text)
+        tokens = vi_word_tokenize(text)
     else:
-        return nltk.word_tokenize(text)
+        tokens = nltk.word_tokenize(text)
+    
+    # thêm transliteration
+    token_objs = []
+    for tok in tokens:
+        token_objs.append({
+            "token": tok,
+            "transliteration": transliterate_token(tok, lang_code)
+        })
+    return token_objs
 
 @app.post("/segment")
 async def segment_text(input: TextInput):
@@ -65,7 +98,8 @@ async def segment_text(input: TextInput):
     return {
         "language_code": lang_code,
         "force_nltk": force_nltk,
-        "tokens": tokens
+        "tokens": tokens,
+        "text": text
     }
 
 @app.post("/paragraph/segment")
@@ -99,7 +133,8 @@ async def paragraph_segment(input: TextInput):
     return {
         "language_code": lang_code,
         "force_nltk": force_nltk,
-        "sentences": segmented_sentences
+        "sentences": segmented_sentences,
+        "text": text
     }
 
 # ------------------------

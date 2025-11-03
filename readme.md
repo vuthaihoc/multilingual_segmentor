@@ -1,86 +1,106 @@
-# Text Segmentation API
+# FastAPI Text Segmentation & Transliteration API
 
-API phân đoạn (tokenize) văn bản theo ngôn ngữ, hỗ trợ tiếng:
+API này cung cấp các endpoint để:
 
-- Tiếng Việt (via `underthesea`)
-- Tiếng Trung (via `jieba`)
-- Tiếng Nhật (via `fugashi`)
-- Tiếng Hàn (via `KoNLPy`)
-- Các ngôn ngữ khác (via `nltk`)
-
-API hỗ trợ:
-
-- Phân đoạn 1 đoạn text (`/segment`)
-- Phân đoạn theo câu (`/paragraph/segment`)
-- Phân đoạn bulk nhiều đoạn text cùng lúc (`/bulk/segment`)
+- Tách từ (tokenize) cho nhiều ngôn ngữ: **Tiếng Trung, Nhật, Hàn, Việt, và các ngôn ngữ khác**
+- Tách câu và tokenize từng câu
+- **Transliteration** cho CJK (Chinese / Japanese / Korean) tương ứng với mỗi token
+- Hỗ trợ **bulk processing** cho nhiều đoạn text cùng lúc
 
 ---
 
-## 1️⃣ Cài đặt
+## 📦 Yêu cầu
 
-```bash
-# Clone repo
-git clone <repo-url>
-cd <repo-folder>
+- Python ≥ 3.10
+- FastAPI
+- langid
+- nltk
+- jieba
+- fugashi
+- konlpy
+- underthesea
+- pypinyin
+- pykakasi
+- hgtk
 
-# Tạo virtualenv
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
+---
 
-# Cài dependencies
-pip install fastapi uvicorn langid pycountry jieba fugashi konlpy nltk underthesea
+### `requirements.txt` ví dụ
+
+```
+fastapi
+uvicorn
+langid
+nltk
+jieba
+fugashi
+konlpy
+underthesea
+pypinyin==0.55.0
+pykakasi==2.3.0
+hgtk==0.2.1
 ```
 
-> Lưu ý: `konlpy` yêu cầu Java JDK.
-> `fugashi` yêu cầu `mecab` cài sẵn trên hệ thống.
-
 ---
 
-## 2️⃣ Chạy server
+## 🚀 Cài đặt & chạy server
 
 ```bash
+pip install -r requirements.txt
+
+# chạy server
 uvicorn main:app --reload
 ```
 
-Server sẽ chạy ở `http://127.0.0.1:8000`
+Mặc định API sẽ chạy tại `http://127.0.0.1:8000`.
 
 ---
 
-## 3️⃣ Endpoints
+## 📌 Endpoints
 
-### `/segment`
+### 1. `/segment` — tokenize 1 đoạn text
 
-- Phân đoạn 1 đoạn text
-- **Method:** POST
-- **Body:**
+**Request JSON:**
 
 ```json
 {
-  "text": "văn bản cần phân đoạn",
-  "language_code": "zh",    # tuỳ chọn, nếu bỏ trống sẽ tự detect
-  "force_nltk": false       # tuỳ chọn, ép dùng nltk
+  "text": "突然间，一切都崩塌了",
+  "language_code": "zh",
+  "force_nltk": false
 }
 ```
 
-- **Response:**
+**Response JSON:**
 
 ```json
 {
   "language_code": "zh",
   "force_nltk": false,
-  "tokens": ["突然间", "，", "一切", "都", "崩塌", "了"]
+  "tokens": [
+    { "token": "突然间", "transliteration": "turanjian" },
+    { "token": "，", "transliteration": "，" },
+    { "token": "一切", "transliteration": "yiqie" },
+    { "token": "都", "transliteration": "dou" },
+    { "token": "崩塌", "transliteration": "bengta" },
+    { "token": "了", "transliteration": "le" }
+  ]
 }
 ```
 
 ---
 
-### `/paragraph/segment`
+### 2. `/paragraph/segment` — tách câu + tokenize từng câu
 
-- Tách câu và phân đoạn theo câu
-- **Method:** POST
-- **Body:** giống `/segment`
-- **Response:**
+**Request JSON:**
+
+```json
+{
+  "text": "Xin chào. Tôi là ChatGPT.",
+  "language_code": "vi"
+}
+```
+
+**Response JSON:**
 
 ```json
 {
@@ -88,12 +108,21 @@ Server sẽ chạy ở `http://127.0.0.1:8000`
   "force_nltk": false,
   "sentences": [
     {
-      "sentence": "Hôm nay trời đẹp.",
-      "tokens": ["Hôm", "nay", "trời", "đẹp", "."]
+      "sentence": "Xin chào.",
+      "tokens": [
+        { "token": "Xin", "transliteration": "Xin" },
+        { "token": "chào", "transliteration": "chào" },
+        { "token": ".", "transliteration": "." }
+      ]
     },
     {
-      "sentence": "Chúng ta đi công viên nhé?",
-      "tokens": ["Chúng", "ta", "đi", "công", "viên", "nhé", "?"]
+      "sentence": "Tôi là ChatGPT.",
+      "tokens": [
+        { "token": "Tôi", "transliteration": "Tôi" },
+        { "token": "là", "transliteration": "là" },
+        { "token": "ChatGPT", "transliteration": "ChatGPT" },
+        { "token": ".", "transliteration": "." }
+      ]
     }
   ]
 }
@@ -101,51 +130,53 @@ Server sẽ chạy ở `http://127.0.0.1:8000`
 
 ---
 
-### `/bulk/segment`
+### 3. `/bulk/segment` — tokenize nhiều đoạn text cùng lúc
 
-- Phân đoạn nhiều đoạn text cùng lúc
-- **Method:** POST
-- **Body:**
+**Request JSON:**
 
 ```json
 {
   "items": [
-    { "text": "Xin chào, tôi là ChatGPT." },
     { "text": "突然间，一切都崩塌了" },
     { "text": "こんにちは、元気ですか？" },
-    { "text": "오늘 날씨가 좋네요" }
+    { "text": "안녕하세요" }
   ]
 }
 ```
 
-- **Response:**
+**Response JSON:**
 
 ```json
 {
   "results": [
     {
-      "language_code": "vi",
-      "force_nltk": false,
-      "tokens": ["Xin", "chào", ",", "tôi", "là", "ChatGPT", "."],
-      "text": "Xin chào, tôi là ChatGPT."
-    },
-    {
       "language_code": "zh",
       "force_nltk": false,
-      "tokens": ["突然间", "，", "一切", "都", "崩塌", "了"],
-      "text": "突然间，一切都崩塌了"
+      "tokens": [
+        { "token": "突然间", "transliteration": "turanjian" },
+        { "token": "，", "transliteration": "，" },
+        { "token": "一切", "transliteration": "yiqie" },
+        { "token": "都", "transliteration": "dou" },
+        { "token": "崩塌", "transliteration": "bengta" },
+        { "token": "了", "transliteration": "le" }
+      ]
     },
     {
       "language_code": "ja",
       "force_nltk": false,
-      "tokens": ["こんにちは", "元気", "です", "か", "？"],
-      "text": "こんにちは、元気ですか？"
+      "tokens": [
+        { "token": "こんにちは", "transliteration": "konnichiwa" },
+        { "token": "、", "transliteration": "、" },
+        { "token": "元気", "transliteration": "genki" },
+        { "token": "です", "transliteration": "desu" },
+        { "token": "か", "transliteration": "ka" },
+        { "token": "？", "transliteration": "？" }
+      ]
     },
     {
       "language_code": "ko",
       "force_nltk": false,
-      "tokens": ["오늘", "날씨", "가", "좋네요"],
-      "text": "오늘 날씨가 좋네요"
+      "tokens": [{ "token": "안녕하세요", "transliteration": "annyeonghaseyo" }]
     }
   ]
 }
@@ -153,34 +184,16 @@ Server sẽ chạy ở `http://127.0.0.1:8000`
 
 ---
 
-## 4️⃣ Ví dụ curl
-
-### 4.1 Tiếng Trung
+### 4. Ví dụ `curl` sử dụng inline JSON
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/bulk/segment" \
--H "Content-Type: application/json" \
--d '{
-  "items": [{"text": "突然间，一切都崩塌了"}]
-}'
-```
-
-### 4.2 Tiếng Nhật
-
-```bash
-curl -X POST "http://127.0.0.1:8000/bulk/segment" \
--H "Content-Type: application/json" \
--d '{
-  "items": [{"text": "今日はとても良い天気です"}]
-}'
-```
-
-### 4.3 Tiếng Hàn
-
-```bash
-curl -X POST "http://127.0.0.1:8000/bulk/segment" \
--H "Content-Type: application/json" \
--d '{
-  "items": [{"text": "오늘 날씨가 좋네요"}]
-}'
+     -H "Content-Type: application/json" \
+     -d '{
+           "items": [
+             {"text": "突然间，一切都崩塌了"},
+             {"text": "こんにちは、元気ですか？"},
+             {"text": "안녕하세요"}
+           ]
+         }'
 ```
