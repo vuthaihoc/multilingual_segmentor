@@ -8,9 +8,9 @@ from konlpy.tag import Okt
 import nltk
 from underthesea import sent_tokenize as vi_sent_tokenize, word_tokenize as vi_word_tokenize
 
-from pypinyin import lazy_pinyin
+from pypinyin import lazy_pinyin, Style
 import pykakasi
-import hgtk
+from korean_romanizer.romanizer import Romanizer
 
 nltk.download("punkt", quiet=True)
 
@@ -23,10 +23,17 @@ ko_tagger = Okt()
 # khởi tạo transliteration cho JA
 kks = pykakasi.kakasi()
 
+style_map = {
+    "TONE": Style.TONE,
+    "NORMAL": Style.NORMAL,
+    "TONE2": Style.TONE2
+}
+
 class TextInput(BaseModel):
     text: str
     language_code: str | None = None
     force_nltk: bool = False
+    pinyin_style: str | None = None
 
 def to_iso639_1(lang_code: str) -> str:
     try:
@@ -40,24 +47,22 @@ def to_iso639_1(lang_code: str) -> str:
         pass
     return lang_code[:2]
 
-def transliterate_token(token: str, lang_code: str) -> str:
+def transliterate_token(token: str, lang_code: str, pinyin_style=Style.TONE) -> str:
     if lang_code == "zh":
-        # pypinyin trả list, nối lại thành string cho token
-        return "".join(lazy_pinyin(token))
+        return "".join(lazy_pinyin(token, style=pinyin_style))
     elif lang_code == "ja":
-        result = ja_kakasi.convert(token)
-        # lấy phần romaji của token
+        result = kks.convert(token)
         return "".join([r['hepburn'] for r in result])
     elif lang_code == "ko":
         try:
-            return hgtk.text.transliterate(token)
-        except hgtk.exception.NotHangulException:
+            return Romanizer(token).romanize();
+        except :
             return token
     else:
-        return token  # các ngôn ngữ khác giữ nguyên
+        return token
 
 
-def segment_text_by_lang(text: str, lang_code: str, force_nltk: bool):
+def segment_text_by_lang(text: str, lang_code: str, force_nltk: bool, pinyin_style=Style.TONE):
     if force_nltk:
         tokens = nltk.word_tokenize(text)
     elif lang_code == "zh":
@@ -71,12 +76,11 @@ def segment_text_by_lang(text: str, lang_code: str, force_nltk: bool):
     else:
         tokens = nltk.word_tokenize(text)
     
-    # thêm transliteration
     token_objs = []
     for tok in tokens:
         token_objs.append({
             "token": tok,
-            "transliteration": transliterate_token(tok, lang_code)
+            "transliteration": transliterate_token(tok, lang_code, pinyin_style)
         })
     return token_objs
 
@@ -93,7 +97,8 @@ async def segment_text(input: TextInput):
         except:
             lang_code = "und"
 
-    tokens = segment_text_by_lang(text, lang_code, force_nltk)
+    pinyin_style = style_map.get(input.pinyin_style, Style.TONE)
+    tokens = segment_text_by_lang(text, lang_code, force_nltk, pinyin_style)
 
     return {
         "language_code": lang_code,
@@ -107,6 +112,7 @@ async def paragraph_segment(input: TextInput):
     text = input.text
     force_nltk = input.force_nltk
     lang_code = input.language_code
+    pinyin_style = style_map.get(input.pinyin_style, Style.TONE)
 
     if not lang_code:
         try:
@@ -124,7 +130,7 @@ async def paragraph_segment(input: TextInput):
     segmented_sentences = []
 
     for sentence in sentences:
-        tokens = segment_text_by_lang(sentence, lang_code, force_nltk)
+        tokens = segment_text_by_lang(sentence, lang_code, force_nltk, pinyin_style)
         segmented_sentences.append({
             "sentence": sentence,
             "tokens": tokens
@@ -142,6 +148,9 @@ async def paragraph_segment(input: TextInput):
 # ------------------------
 class BulkTextInput(BaseModel):
     items: list[TextInput]
+    language_code: str | None = None
+    force_nltk: bool = False
+    pinyin_style: str | None = None
 
 @app.post("/bulk/segment")
 async def bulk_segment(input: BulkTextInput):
@@ -150,6 +159,7 @@ async def bulk_segment(input: BulkTextInput):
         text = item.text
         force_nltk = item.force_nltk
         lang_code = item.language_code
+        pinyin_style = style_map.get(input.pinyin_style, Style.TONE)
 
         if not lang_code:
             try:
@@ -158,7 +168,7 @@ async def bulk_segment(input: BulkTextInput):
             except:
                 lang_code = "und"
 
-        tokens = segment_text_by_lang(text, lang_code, force_nltk)
+        tokens = segment_text_by_lang(text, lang_code, force_nltk, pinyin_style)
         results.append({
             "language_code": lang_code,
             "force_nltk": force_nltk,
