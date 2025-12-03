@@ -13,3 +13,4 @@ pykakasi>=2.3.0
 hgtk>=0.2.1
 six>=1.16.0
 korean-romanizer
+eng-to-ipa

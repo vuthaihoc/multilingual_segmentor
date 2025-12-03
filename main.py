@@ -11,6 +11,7 @@ from underthesea import sent_tokenize as vi_sent_tokenize, word_tokenize as vi_w
 from pypinyin import lazy_pinyin, Style
 import pykakasi
 from korean_romanizer.romanizer import Romanizer
+import eng_to_ipa as ipa
 
 nltk.download("punkt", quiet=True)
 
@@ -29,11 +30,16 @@ style_map = {
     "TONE2": Style.TONE2
 }
 
+
 class TextInput(BaseModel):
     text: str
     language_code: str | None = None
     force_nltk: bool = False
     pinyin_style: str | None = None
+    country_code: str | None = None  # US/UK
+
+def get_ipa_espeak(word: str, country_code: str | None):
+    return ipa.convert(word)
 
 def to_iso639_1(lang_code: str) -> str:
     try:
@@ -47,7 +53,9 @@ def to_iso639_1(lang_code: str) -> str:
         pass
     return lang_code[:2]
 
-def transliterate_token(token: str, lang_code: str, pinyin_style=Style.TONE) -> str:
+
+def transliterate_token(token: str, lang_code: str, pinyin_style: Style = Style.TONE,
+                        country_code: str | None = None) -> str:
     if lang_code == "zh":
         return "".join(lazy_pinyin(token, style=pinyin_style))
     elif lang_code == "ja":
@@ -55,14 +63,23 @@ def transliterate_token(token: str, lang_code: str, pinyin_style=Style.TONE) -> 
         return "".join([r['hepburn'] for r in result])
     elif lang_code == "ko":
         try:
-            return Romanizer(token).romanize();
-        except :
+            return Romanizer(token).romanize()
+        except:
+            return token
+    elif lang_code == "en":  # NEW
+        try:
+            pronunciation = get_ipa_espeak(token, country_code)
+            if pronunciation is None or pronunciation == token:
+                return token
+            return pronunciation
+        except Exception:
             return token
     else:
         return token
 
 
-def segment_text_by_lang(text: str, lang_code: str, force_nltk: bool, pinyin_style=Style.TONE):
+def segment_text_by_lang(text: str, lang_code: str, force_nltk: bool, pinyin_style: Style = Style.TONE,
+                         country_code: str | None = None):
     if force_nltk:
         tokens = nltk.word_tokenize(text)
     elif lang_code == "zh":
@@ -75,20 +92,22 @@ def segment_text_by_lang(text: str, lang_code: str, force_nltk: bool, pinyin_sty
         tokens = vi_word_tokenize(text)
     else:
         tokens = nltk.word_tokenize(text)
-    
+
     token_objs = []
     for tok in tokens:
         token_objs.append({
             "token": tok,
-            "transliteration": transliterate_token(tok, lang_code, pinyin_style)
+            "transliteration": transliterate_token(tok, lang_code, pinyin_style, country_code)
         })
     return token_objs
 
+
 @app.post("/segment")
-async def segment_text(input: TextInput):
-    text = input.text
-    force_nltk = input.force_nltk
-    lang_code = input.language_code
+async def segment_text(req_input: TextInput):
+    text = req_input.text
+    force_nltk = req_input.force_nltk
+    lang_code = req_input.language_code
+    country_code = req_input.country_code
 
     if not lang_code:
         try:
@@ -97,7 +116,7 @@ async def segment_text(input: TextInput):
         except:
             lang_code = "und"
 
-    pinyin_style = style_map.get(input.pinyin_style, Style.TONE)
+    pinyin_style = style_map.get(req_input.pinyin_style, Style.TONE)
     tokens = segment_text_by_lang(text, lang_code, force_nltk, pinyin_style)
 
     return {
@@ -106,6 +125,7 @@ async def segment_text(input: TextInput):
         "tokens": tokens,
         "text": text
     }
+
 
 @app.post("/paragraph/segment")
 async def paragraph_segment(input: TextInput):
@@ -143,6 +163,7 @@ async def paragraph_segment(input: TextInput):
         "text": text
     }
 
+
 # ------------------------
 # 3️⃣ /bulk/segment (NEW)
 # ------------------------
@@ -151,6 +172,7 @@ class BulkTextInput(BaseModel):
     language_code: str | None = None
     force_nltk: bool = False
     pinyin_style: str | None = None
+
 
 @app.post("/bulk/segment")
 async def bulk_segment(input: BulkTextInput):
